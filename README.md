@@ -76,7 +76,7 @@ Windows users Use `V2rayN `
 
 __________________________
 
-$$ Copyright NXT-Tech Hub™️ $$
+Copyright NXT-Tech Hub™️
 
 * [cahnnel](https://t.me/+-CKhVAS1bAw5YzA1) 
 * [Group](https://t.me/+81OS4xCmRXQyOTA5) 
