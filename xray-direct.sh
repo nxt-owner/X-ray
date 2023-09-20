@@ -1,5 +1,5 @@
-#!/bin/sh
-echo "X-ray Core from NXT"
+#!/bin/bash
+
 echo Enter a valid gen4 UUID:
 read UUID
 
@@ -7,77 +7,66 @@ rm -rf /etc/localtime
 cp /usr/share/zoneinfo/Asia/Colombo /etc/localtime
 date -R
 
-ufw disable
 
-bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install
+#updating and adding firewall rules
+
+apt update
+apt upgrade
+apt purge iptables-persistent
+apt install ufw
+ufw allow 'OpenSSH'
+ufw allow 443/tcp
+ufw enable
+
+bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install --version v1.8.1
 
 rm -rf /usr/local/etc/xray/config.json
 cat << EOF > /usr/local/etc/xray/config.json
 {
   "log": {
-    "loglevel": "warning"
-  },
-  "dns": {
-    "servers": [
-      "1.1.1.1"
-    ],
-    "queryStrategy": "UseIPv4"
-  },
-  "routing": {
-    "domainStrategy": "IPIfNonMatch",
-    "rules": [
-      {
-        "type": "field",
-        "ip": [
-          "1.1.1.1"
-        ],
-        "outboundTag": "direct"
-      },
-      {
-        "type": "field",
-        "domain": [
-          "geosite:category-ads-all"
-        ],
-        "outboundTag": "block"
-      },
-      {
-        "type": "field",
-        "ip": [
-          "geoip:private"
-        ],
-        "outboundTag": "block"
-      }
-    ]
+    "loglevel": "none"
   },
   "inbounds": [
     {
-      "listen": "0.0.0.0",
       "port": 443,
       "protocol": "vless",
       "settings": {
         "clients": [
           {
             "id": "$UUID",
-            "flow": "xtls-rprx-direct"
+            "flow": "xtls-rprx-vision",
+            "level": 0,
+            "email": "love@example.com"
           }
         ],
         "decryption": "none",
         "fallbacks": [
           {
-            "alpn": "h2",
-            "dest": "2001",
-            "xver": 0
+            "dest": 1310,
+            "xver": 1
+          },
+          {
+            "path": "/websocket",
+            "dest": 1234,
+            "xver": 1
+          },
+          {
+            "path": "/vmesstcp",
+            "dest": 2345,
+            "xver": 1
+          },
+          {
+            "path": "/vmessws",
+            "dest": 3456,
+            "xver": 1
           }
         ]
       },
       "streamSettings": {
         "network": "tcp",
-        "security": "xtls",
-        "xtlsSettings": {
-          "minVersion": "1.3",
-          "cipherSuites": "TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256:TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256:TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384:TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256",
+        "security": "tls",
+        "tlsSettings": {
           "alpn": [
-            "h2",
             "http/1.1"
           ],
           "certificates": [
@@ -90,86 +79,115 @@ cat << EOF > /usr/local/etc/xray/config.json
       }
     },
     {
-      "port": 2001,
+      "port": 1310,
       "listen": "127.0.0.1",
-      "protocol": "vless",
+      "protocol": "trojan",
       "settings": {
         "clients": [
           {
-            "id": "$UUID"
+            "password": "$UUID",
+            "level": 0,
+            "email": "love@example.com"
           }
         ],
-        "decryption": "none"
-      },
-      "streamSettings": {
-        "network": "grpc",
-        "grpcSettings": {
-          "serviceName": "grpc"
-        }
-      }
-    },
-    {
-      "port": 80,
-      "protocol": "vmess",
-      "settings": {
-        "clients": [
+        "fallbacks": [
           {
-            "id": "$UUID"
+            "dest": 80
           }
         ]
       },
       "streamSettings": {
         "network": "tcp",
+        "security": "none",
         "tcpSettings": {
+          "acceptProxyProtocol": true
+        }
+      }
+    },
+    {
+      "port": 1234,
+      "listen": "127.0.0.1",
+      "protocol": "vless",
+      "settings": {
+        "clients": [
+          {
+            "id": "$UUID",
+            "level": 0,
+            "email": "love@example.com"
+          }
+        ],
+        "decryption": "none"
+      },
+      "streamSettings": {
+        "network": "ws",
+        "security": "none",
+        "wsSettings": {
+          "acceptProxyProtocol": true,
+          "path": "/websocket"
+        }
+      }
+    },
+    {
+      "port": 2345,
+      "listen": "127.0.0.1",
+      "protocol": "vmess",
+      "settings": {
+        "clients": [
+          {
+            "id": "$UUID",
+            "level": 0,
+            "email": "love@example.com"
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "tcp",
+        "security": "none",
+        "tcpSettings": {
+          "acceptProxyProtocol": true,
           "header": {
             "type": "http",
-            "response": {
-              "version": "1.1",
-              "status": "200",
-              "reason": "OK",
-              "headers": {
-                "Content-Type": [
-                  "application/octet-stream",
-                  "video/mpeg",
-                  "application/x-msdownload",
-                  "text/html",
-                  "application/x-shockwave-flash"
-                ],
-                "Transfer-Encoding": [
-                  "chunked"
-                ],
-                "Connection": [
-                  "keep-alive"
-                ],
-                "Pragma": "no-cache"
-              }
+            "request": {
+              "path": [
+                "/vmesstcp"
+              ]
             }
           }
-        },
-        "security": "none"
+        }
+      }
+    },
+    {
+      "port": 3456,
+      "listen": "127.0.0.1",
+      "protocol": "vmess",
+      "settings": {
+        "clients": [
+          {
+            "id": "$UUID",
+            "level": 0,
+            "email": "love@example.com"
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "ws",
+        "security": "none",
+        "wsSettings": {
+          "acceptProxyProtocol": true,
+          "path": "/vmessws"
+        }
       }
     }
   ],
   "outbounds": [
     {
-      "protocol": "freedom",
-      "settings": {
-        "domainStrategy": "UseIPv4"
-      },
-      "tag": "direct"
-    },
-    {
-      "protocol": "blackhole",
-      "settings": {
-        "response": {
-          "type": "http"
-        }
-      },
-      "tag": "block"
+      "protocol": "freedom"
     }
   ]
 }
 EOF
+
+#accuring a ssl certificate (self-sigend openssl)
 
 openssl req -new -newkey rsa:4096 -days 365 -nodes -x509 \
     -subj "/C=US/ST=Denial/L=Springfield/O=Dis/CN=www.example.com" \
@@ -179,10 +197,13 @@ cp xray.key /etc/xray/xray.key
 cp xray.crt /etc/xray/xray.crt
 chmod 644 /etc/xray/xray.key
 
+#starting xray core on sytem startup
+
 systemctl enable xray
 systemctl restart xray
 
-mkdir ~/across
-git clone https://github.com/teddysun/across ~/across
-chmod 777 ~/across
-bash ~/across/bbr.sh
+#install bbr
+
+wget -P /tmp https://raw.githubusercontent.com/teddysun/across/master/bbr.sh
+chmod +x /tmp/bbr.sh
+/tmp/bbr.sh
